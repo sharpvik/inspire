@@ -11,7 +11,7 @@ type Message []byte
 func Read(rd io.Reader) (Message, error) {
 	r := bufio.NewReader(rd)
 
-	var length int32
+	var length uint32
 	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return nil, err
 	}
@@ -25,6 +25,9 @@ func Read(rd io.Reader) (Message, error) {
 }
 
 func (msg Message) Send(w io.Writer) error {
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(msg))); err != nil {
+		return err
+	}
 	_, err := w.Write(msg)
 	return err
 }
