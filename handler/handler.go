@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/sharpvik/purr/message"
+	"github.com/sharpvik/inspire/message"
 )
 
 // Any function that accepts a Message and returns a Message is a Handler.

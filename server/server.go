@@ -1,13 +1,14 @@
 package server
 
 import (
-	"errors"
-	"fmt"
+	"io"
 	"log"
 	"net"
 
-	"github.com/sharpvik/purr/handler"
-	"github.com/sharpvik/purr/message"
+	"github.com/sharpvik/inspire/challenge"
+	"github.com/sharpvik/inspire/handler"
+	"github.com/sharpvik/inspire/message"
+	"github.com/sharpvik/inspire/transaction"
 )
 
 //	A Server's life ain't fun as
@@ -21,7 +22,8 @@ import (
 type Server struct {
 	/* Configurable */
 
-	handler handler.Handler
+	handle    handler.Handler
+	challenge challenge.Challenge
 
 	/* Internal */
 
@@ -29,9 +31,10 @@ type Server struct {
 }
 
 // Construct a new Server instance with a given handler.
-func New(h handler.Handler) *Server {
+func New(h handler.Handler, c challenge.Challenge) *Server {
 	return &Server{
-		handler: handler.EchoIfNil(h), // sensible default
+		handle:    handler.EchoIfNil(h), // sensible default
+		challenge: c,
 	}
 }
 
@@ -47,7 +50,7 @@ func (s *Server) ListenAndServe(addr string) error {
 
 // Handling an incoming Message is simple - just call the Handler.
 func (s *Server) Handle(msg message.Message) message.Message {
-	return s.handler(msg)
+	return s.handle(msg)
 }
 
 // This loop is run forever until the server is stopped.
@@ -70,39 +73,25 @@ func (s *Server) acceptAndHandleConnection() error {
 	return nil
 }
 
-// To handle a connection we must simply handle incoming Messages one-by-one
-// until the connection is closed.
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.recoverFromConnectionPanic(conn)
 	for {
-		if err := s.handleRequest(conn); err != nil {
-			log.Println(err)
-		}
+		transaction.New(conn, s.handle, s.challenge).Handle()
 	}
 }
 
 func (s *Server) recoverFromConnectionPanic(conn net.Conn) {
-	if something := recover(); something != nil {
-		if err, ok := something.(error); ok {
-			log.Println(errors.Join(connectionHandlingError(conn), err))
-			conn.Close()
-		}
-	}
-}
+	conn.Close()
 
-func connectionHandlingError(conn net.Conn) error {
-	return fmt.Errorf(
-		"encountered a panic during connection handling (addr %s | %s)",
-		conn.LocalAddr(), conn.RemoteAddr(),
-	)
-}
-
-// Handle request by reading a Message, coming up with a response, and sending
-// it back to the client.
-func (s *Server) handleRequest(conn net.Conn) error {
-	request, err := message.Read(conn)
-	if err != nil {
-		return err
+	something := recover()
+	if something == nil {
+		return
 	}
-	return s.Handle(request).Send(conn)
+
+	err, ok := something.(error)
+	if !ok || err == io.EOF {
+		return
+	}
+
+	log.Println(err)
 }

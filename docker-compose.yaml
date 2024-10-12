@@ -1,0 +1,22 @@
+services:
+  teach:
+    build:
+      context: .
+      dockerfile: ./.docker/teach/Dockerfile
+    image: teach
+    container_name: teach
+    environment:
+      - DIFFICULTY=32
+      # ^^^^^^^^^^^^^
+      # About 2 seconds to generate PoW
+
+  learn:
+    depends_on:
+      - teach
+    build:
+      context: .
+      dockerfile: ./.docker/learn/Dockerfile
+    image: learn
+    container_name: learn
+    environment:
+      - HOST=teach

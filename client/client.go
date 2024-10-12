@@ -3,7 +3,9 @@ package client
 import (
 	"net"
 
-	"github.com/sharpvik/purr/message"
+	"github.com/bwesterb/go-pow"
+	"github.com/sharpvik/inspire/message"
+	"github.com/sharpvik/inspire/transaction"
 )
 
 // Client is happy to connect to the Server and exchange some data with it.
@@ -34,7 +36,23 @@ func (c *Client) Send(msg message.Message) (message.Message, error) {
 	if err := msg.Send(c.conn); err != nil {
 		return nil, err
 	}
+	if err := c.work(); err != nil {
+		return nil, err
+	}
 	return message.Read(c.conn)
+}
+
+// Before we can proceed, we have to prove that we've done our homework.
+func (c *Client) work() error {
+	challenge, err := message.Read(c.conn)
+	if err != nil {
+		return err
+	}
+	proof, err := pow.Fulfil(string(challenge), transaction.Done)
+	if err != nil {
+		return err
+	}
+	return message.Message(proof).Send(c.conn)
 }
 
 // We don't have to redial the Server if we already have a connection. This
